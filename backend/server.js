@@ -1,8 +1,24 @@
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
 require("dotenv").config();
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*"
+  }
+});
 const path = require("path");
+
+io.on("connection", (socket) => {
+  console.log("React frontend connected to Socket.IO:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("React frontend disconnected from Socket.IO:", socket.id);
+  });
+});
 
 app.get("/privacy-policy", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "privacyPolicy", "index.html"));
@@ -87,6 +103,7 @@ async function fetchLeadDetails(leadgenId) {
     console.dir(leadDetails, { depth: null });
 
     leads.push(leadDetails);
+    io.emit("new_lead", leadDetails);
     return leadDetails;
   } catch (error) {
     console.error("Could not fetch lead details from the Meta Graph API.");
@@ -163,6 +180,6 @@ app.post('/webhook', (req, res) => {
   });
 });
 
-app.listen(3000, () => {
+server.listen(3000, () => {
   console.log("Server started is successfully");
 });

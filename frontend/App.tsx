@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useCallback, useEffect, useState } from "react";
+import { io } from "socket.io-client";
 import {
   SafeAreaProvider,
   SafeAreaView,
@@ -64,6 +65,35 @@ function App() {
     loadLeads();
   }, [loadLeads]);
 
+  useEffect(() => {
+    const socket = io("http://10.0.2.2:3000");
+
+    socket.on("connect", () => {
+      console.log("Connected to backend via Socket.IO");
+    });
+
+    socket.on("new_lead", (newLead: Lead) => {
+      console.log("New lead received via Socket.IO", newLead);
+
+      setLeads((currentLeads) => {
+        const leadAlreadyExists = currentLeads.some(
+          (lead) => lead.leadgen_id === newLead.leadgen_id,
+        );
+
+        if (leadAlreadyExists) {
+          return currentLeads;
+        }
+
+        return [newLead, ...currentLeads];
+      });
+    });
+
+    return () => {
+      socket.off("new_lead");
+      socket.disconnect();
+    };
+  }, []);
+
   const normalizedSearchText = searchText.trim().toLowerCase();
   const filteredLeads = leads.filter((lead) => {
     const searchableText = [
@@ -80,11 +110,29 @@ function App() {
 
   const renderLead = ({ item }: { item: Lead }) => (
     <View style={styles.leadCard}>
-      <Text style={styles.leadName}>{item.full_name || "Unnamed lead"}</Text>
-      <Text style={styles.leadDetail}>{item.email || "No email provided"}</Text>
-      {item.phone_number ? (
-        <Text style={styles.leadDetail}>{item.phone_number}</Text>
-      ) : null}
+      <View style={styles.leadCardHeader}>
+        <View>
+          <Text style={styles.leadEyebrow}>INCOMING LEAD</Text>
+          <Text style={styles.leadName}>{item.full_name || "Unnamed lead"}</Text>
+        </View>
+        <View style={styles.leadStatus}>
+          <View style={styles.leadStatusDot} />
+          <Text style={styles.leadStatusText}>NEW</Text>
+        </View>
+      </View>
+
+      <View style={styles.leadDetails}>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>EMAIL</Text>
+          <Text style={styles.leadDetail}>{item.email || "No email provided"}</Text>
+        </View>
+        {item.phone_number ? (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>PHONE</Text>
+            <Text style={styles.leadDetail}>{item.phone_number}</Text>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 
@@ -98,32 +146,49 @@ function App() {
         <StatusBar barStyle="dark-content" />
 
         <View style={styles.container}>
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>LeadFlow</Text>
-              <Text style={styles.subtitle}>Leads</Text>
+          <View style={styles.hero}>
+            <View style={styles.brandRow}>
+              <View style={styles.brandMark}>
+                <Text style={styles.brandMarkText}>LF</Text>
+              </View>
+              <Text style={styles.brandName}>LEADFLOW</Text>
+              <View style={styles.brandAccent} />
+              <View style={styles.livePill}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveText}>LIVE SYNC</Text>
+              </View>
             </View>
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => loadLeads(true)}
-              style={({ pressed }) => [
-                styles.refreshButton,
-                pressed && styles.refreshButtonPressed,
-              ]}>
-              <Text style={styles.refreshButtonText}>Refresh</Text>
-            </Pressable>
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.title}>Leads</Text>
+                <Text style={styles.subtitle}>Your pipeline, in real time.</Text>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => loadLeads(true)}
+                style={({ pressed }) => [
+                  styles.refreshButton,
+                  pressed && styles.refreshButtonPressed,
+                ]}>
+                <Text style={styles.refreshButtonText}>Refresh</Text>
+              </Pressable>
+            </View>
           </View>
 
-          <TextInput
-            autoCapitalize="none"
-            clearButtonMode="while-editing"
-            onChangeText={setSearchText}
-            placeholder="Search by name, email, or phone"
-            placeholderTextColor="#7b8794"
-            style={styles.searchInput}
-            value={searchText}
-          />
+          <View style={styles.searchShell}>
+            <Text style={styles.searchLabel}>SEARCH LEADS</Text>
+            <TextInput
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+              onChangeText={setSearchText}
+              placeholder="Name, email, or phone"
+              placeholderTextColor="#8d8a82"
+              style={styles.searchInput}
+              value={searchText}
+            />
+          </View>
 
           {isLoading ? (
             <View style={styles.stateContainer}>
@@ -171,78 +236,206 @@ function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#f5f7fb",
+    backgroundColor: "#f3f6f3",
   },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
   },
-  header: {
+  hero: {
+    backgroundColor: "#ffffff",
+    borderBottomColor: "#e1e9e4",
+    borderBottomWidth: 1,
+    marginHorizontal: -18,
+    paddingBottom: 26,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+  },
+  brandRow: {
     alignItems: "center",
     flexDirection: "row",
+  },
+  brandMark: {
+    alignItems: "center",
+    backgroundColor: "#4C806B",
+    borderRadius: 15,
+    height: 30,
+    justifyContent: "center",
+    width: 30,
+  },
+  brandMarkText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  brandName: {
+    color: "#17251f",
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    marginLeft: 10,
+  },
+  brandAccent: {
+    backgroundColor: "#4C806B",
+    borderRadius: 4,
+    height: 8,
+    marginLeft: 7,
+    width: 8,
+  },
+  livePill: {
+    alignItems: "center",
+    backgroundColor: "#e8f0ec",
+    borderRadius: 6,
+    flexDirection: "row",
+    marginLeft: "auto",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  liveDot: {
+    backgroundColor: "#4C806B",
+    borderRadius: 4,
+    height: 7,
+    marginRight: 7,
+    width: 7,
+  },
+  liveText: {
+    color: "#4C806B",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  header: {
+    alignItems: "flex-end",
+    flexDirection: "row",
     justifyContent: "space-between",
-    paddingBottom: 20,
-    paddingTop: 24,
+    paddingTop: 34,
   },
   title: {
-    color: "#102a43",
-    fontSize: 28,
-    fontWeight: "700",
+    color: "#17251f",
+    fontSize: 38,
+    fontWeight: "800",
+    letterSpacing: -0.5,
   },
   subtitle: {
-    color: "#52606d",
-    fontSize: 15,
-    marginTop: 2,
+    color: "#68776f",
+    fontSize: 14,
+    marginTop: 6,
   },
   refreshButton: {
-    backgroundColor: "#176b87",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    backgroundColor: "#4C806B",
+    borderRadius: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
   },
   refreshButtonPressed: {
-    backgroundColor: "#0f5268",
+    backgroundColor: "#3B6655",
   },
   refreshButtonText: {
     color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "800",
   },
-  searchInput: {
+  searchShell: {
     backgroundColor: "#ffffff",
-    borderColor: "#d9e2ec",
+    borderColor: "#dce7e0",
     borderRadius: 8,
     borderWidth: 1,
-    color: "#1f2933",
-    fontSize: 16,
-    marginBottom: 16,
+    marginTop: 18,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingTop: 12,
+  },
+  searchLabel: {
+    color: "#4C806B",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  searchInput: {
+    color: "#15171d",
+    fontSize: 17,
+    paddingBottom: 13,
+    paddingHorizontal: 0,
+    paddingTop: 7,
   },
   listContent: {
-    paddingBottom: 24,
+    paddingBottom: 28,
+    paddingTop: 18,
   },
   emptyListContent: {
     flexGrow: 1,
+    paddingTop: 18,
   },
   leadCard: {
     backgroundColor: "#ffffff",
-    borderColor: "#d9e2ec",
+    borderColor: "#dce7e0",
     borderRadius: 8,
     borderWidth: 1,
-    marginBottom: 12,
-    padding: 16,
+    marginBottom: 10,
+    padding: 17,
+  },
+  leadCardHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  leadEyebrow: {
+    color: "#4C806B",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 7,
+  },
+  leadStatus: {
+    alignItems: "center",
+    backgroundColor: "#e8f0ec",
+    borderRadius: 6,
+    flexDirection: "row",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  leadStatusDot: {
+    backgroundColor: "#4C806B",
+    borderRadius: 3,
+    height: 6,
+    marginRight: 5,
+    width: 6,
+  },
+  leadStatusText: {
+    color: "#4C806B",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  leadDetails: {
+    borderTopColor: "#e3ebe6",
+    borderTopWidth: 1,
+    marginTop: 16,
+    paddingTop: 12,
+  },
+  detailRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    marginTop: 6,
+  },
+  detailLabel: {
+    color: "#4C806B",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    paddingTop: 2,
+    width: 58,
   },
   leadName: {
-    color: "#102a43",
-    fontSize: 17,
-    fontWeight: "700",
-    marginBottom: 8,
+    color: "#4C806B",
+    fontSize: 18,
+    fontWeight: "800",
   },
   leadDetail: {
-    color: "#52606d",
-    fontSize: 14,
-    marginTop: 3,
+    color: "#4C806B",
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "500",
+    lineHeight: 21,
   },
   stateContainer: {
     alignItems: "center",
@@ -251,30 +444,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   stateTitle: {
-    color: "#243b53",
-    fontSize: 18,
-    fontWeight: "700",
+    color: "#15171d",
+    fontSize: 22,
+    fontWeight: "800",
     marginBottom: 8,
     textAlign: "center",
   },
   stateText: {
-    color: "#52606d",
+    color: "#77766f",
     fontSize: 15,
     marginTop: 10,
     textAlign: "center",
   },
   tryAgainButton: {
-    borderColor: "#176b87",
-    borderRadius: 8,
+    backgroundColor: "#4C806B",
+    borderRadius: 7,
     borderWidth: 1,
     marginTop: 18,
     paddingHorizontal: 18,
     paddingVertical: 10,
   },
   tryAgainButtonText: {
-    color: "#176b87",
-    fontSize: 14,
-    fontWeight: "600",
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });
 
